@@ -2,16 +2,6 @@ import { api } from "../../scripts/api.js";
 import { app } from "../../scripts/app.js";
 import { $el, ComfyDialog } from "../../scripts/ui.js";
 import {
-	SUPPORTED_OUTPUT_NODE_TYPES,
-	ShareDialog,
-	ShareDialogChooser,
-	getPotentialOutputsAndOutputNodes,
-	showOpenArtShareDialog,
-	showShareDialog,
-	showYouMLShareDialog
-} from "./comfyui-share-common.js";
-import { OpenArtShareDialog } from "./comfyui-share-openart.js";
-import {
 	free_models, install_pip, install_via_git_url, manager_instance,
 	rebootAPI, setManagerInstance, show_message, customAlert, customPrompt,
 	infoToast, showTerminal, setNeedRestart, handle403Response
@@ -238,7 +228,6 @@ var update_all_button = null;
 var restart_stop_button = null;
 var update_policy_combo = null;
 
-let share_option = 'all';
 var is_updating = false;
 
 
@@ -409,14 +398,6 @@ const style = `
 }
 `;
 
-async function init_share_option() {
-	api.fetchApi('/manager/share_option')
-		.then(response => response.text())
-		.then(data => {
-			share_option = data || 'all';
-		});
-}
-
 async function init_notice(notice) {
 	api.fetchApi('/manager/notice')
 		.then(response => response.text())
@@ -425,7 +406,6 @@ async function init_notice(notice) {
 		})
 }
 
-await init_share_option();
 
 
 async function set_inprogress_mode() {
@@ -802,13 +782,6 @@ function newDOMTokenList(initialTokens) {
 	return classList;
 	}
 
-/**
- * Check whether the node is a potential output node (img, gif or video output)
- */
-const isOutputNode = (node) => {
-	return SUPPORTED_OUTPUT_NODE_TYPES.includes(node.type);
-}
-
 function restartOrStop() {
 	if(restart_stop_button.innerText == 'Restart'){
 		rebootAPI();
@@ -1112,43 +1085,6 @@ class ManagerMenuDialog extends ComfyDialog {
 		const channelSetttingItem = createSettingsCombo("Channel", channel_combo);
 
 
-		// share
-		let share_combo = document.createElement("select");
-		share_combo.setAttribute("title", "Hide the share button in the main menu or set the default action upon clicking it. Additionally, configure the default share site when sharing via the context menu's share button.");
-		share_combo.className = "cm-menu-combo p-select p-component p-inputwrapper p-inputwrapper-filled";
-		const share_options = [
-			['none', 'None'],
-			['openart', 'OpenArt AI'],
-			['youml', 'YouML'],
-			['matrix', 'Matrix Server'],
-			['comfyworkflows', 'ComfyWorkflows'],
-			['copus', 'Copus'],
-			['all', 'All'],
-		];
-		for (const option of share_options) {
-			share_combo.appendChild($el('option', { value: option[0], text: `${option[1]}` }, []));
-		}
-
-		api.fetchApi('/manager/share_option')
-			.then(response => response.text())
-			.then(data => {
-				share_combo.value = data || 'all';
-				share_option = data || 'all';
-			});
-
-		share_combo.addEventListener('change', function (event) {
-			const value = event.target.value;
-			share_option = value;
-			api.fetchApi(`/manager/share_option?value=${value}`);
-			const shareButton = document.getElementById("shareButton");
-			if (value === 'none') {
-				shareButton.style.display = "none";
-			} else {
-				shareButton.style.display = "inline-block";
-			}
-		});
-
-		const shareSetttingItem = createSettingsCombo("Share", share_combo);
 
 		let component_policy_combo = document.createElement("select");
 		component_policy_combo.setAttribute("title", "When loading the workflow, configure which version of the component to use.");
@@ -1195,7 +1131,6 @@ class ManagerMenuDialog extends ComfyDialog {
 			dbRetrievalSetttingItem,
 			channelSetttingItem,
 			previewSetttingItem,
-			shareSetttingItem,
 			componentSetttingItem,
 			updateSetttingItem,
 			//[TODO] replace mt-2 with wrapper div with flex column gap
@@ -1280,48 +1215,6 @@ class ManagerMenuDialog extends ComfyDialog {
 					})
 				]),
 
-				$el("button.p-button.p-component.cm-button", {
-					id: 'workflowgallery-button',
-					type: "button",
-					style: {
-						// ...(localStorage.getItem("wg_last_visited") ? {height: '50px'} : {})
-					},
-					onclick: (e) => {
-						const last_visited_site = localStorage.getItem("wg_last_visited")
-						if (!!last_visited_site) {
-							window.open(last_visited_site, last_visited_site);
-						} else {
-							this.handleWorkflowGalleryButtonClick(e)
-						}
-					},
-				}, [
-					$el("p", {
-						textContent: 'Workflow Gallery',
-						style: {
-							'text-align': 'center',
-							'color': 'var(--input-text)',
-							'font-size': '18px',
-							'margin': 0,
-							'padding': 0,
-						}
-					}, [
-						$el("p", {
-							id: 'workflowgallery-button-last-visited-label',
-							textContent: `(${localStorage.getItem("wg_last_visited") ? localStorage.getItem("wg_last_visited").split('/')[2] : 'none selected'})`,
-							style: {
-								'text-align': 'center',
-								'color': 'var(--input-text)',
-								'font-size': '12px',
-								'margin': 0,
-								'padding': 0,
-							}
-						})
-					]),
-					$el("div.pysssss-workflow-arrow-2", {
-						id: `comfyworkflows-button-arrow`,
-						onclick: this.handleWorkflowGalleryButtonClick
-					})
-				]),
 
 				$el("button.p-button.p-component.cm-button", {
 					id: 'cm-nodeinfo-button',
@@ -1378,104 +1271,6 @@ class ManagerMenuDialog extends ComfyDialog {
 		}
 	}
 
-	handleWorkflowGalleryButtonClick(e) {
-		e.preventDefault();
-		e.stopPropagation();
-		LiteGraph.closeAllContextMenus();
-
-		// Modify the style of the button so that the UI can indicate the last
-		// visited site right away.
-		const modifyButtonStyle = (url) => {
-			const workflowGalleryButton = document.getElementById('workflowgallery-button');
-			workflowGalleryButton.style.height = '50px';
-			const lastVisitedLabel = document.getElementById('workflowgallery-button-last-visited-label');
-			lastVisitedLabel.textContent = `(${url.split('/')[2]})`;
-		}
-
-		const menu = new LiteGraph.ContextMenu(
-			[
-				{
-					title: "Share your art",
-					callback: () => {
-						if (share_option === 'openart') {
-							showOpenArtShareDialog();
-							return;
-						} else if (share_option === 'matrix' || share_option === 'comfyworkflows') {
-							showShareDialog(share_option);
-							return;
-						} else if (share_option === 'youml') {
-							showYouMLShareDialog();
-							return;
-						}
-
-						if (!ShareDialogChooser.instance) {
-							ShareDialogChooser.instance = new ShareDialogChooser();
-						}
-						ShareDialogChooser.instance.show();
-					},
-				},
-				{
-					title: "Open 'openart.ai'",
-					callback: () => {
-						const url = "https://openart.ai/workflows/dev";
-						localStorage.setItem("wg_last_visited", url);
-						window.open(url, url);
-						modifyButtonStyle(url);
-					},
-				},
-				{
-					title: "Open 'youml.com'",
-					callback: () => {
-						const url = "https://youml.com/?from=comfyui-share";
-						localStorage.setItem("wg_last_visited", url);
-						window.open(url, url);
-						modifyButtonStyle(url);
-					},
-				},
-				{
-					title: "Open 'comfyworkflows.com'",
-					callback: () => {
-						const url = "https://comfyworkflows.com/";
-						localStorage.setItem("wg_last_visited", url);
-						window.open(url, url);
-						modifyButtonStyle(url);
-					},
-				},
-				{
-					title: "Open 'esheep'",
-					callback: () => {
-						const url = "https://www.esheep.com";
-						localStorage.setItem("wg_last_visited", url);
-						window.open(url, url);
-						modifyButtonStyle(url);
-					},
-				},
-				{
-					title: "Open 'Copus.io'",
-					callback: () => {
-						const url = "https://www.copus.io";
-						localStorage.setItem("wg_last_visited", url);
-						window.open(url, url);
-						modifyButtonStyle(url);
-					},
-				},
-				{
-					title: "Close",
-					callback: () => {
-						LiteGraph.closeAllContextMenus();
-					},
-				}
-			],
-			{
-				event: e,
-				scale: 1.3,
-			},
-			window
-		);
-		// set the id so that we can override the context menu's z-index to be above the comfyui manager menu
-		menu.root.id = "workflowgallery-button-menu";
-		menu.root.classList.add("pysssss-workflow-popup-2");
-	}
 }
 
 async function getVersion() {
@@ -1617,27 +1412,6 @@ app.registerExtension({
 						free_models(true);
 					},
 					tooltip: "Free model and node cache"
-				}).element,
-				new(await import("../../scripts/ui/components/button.js")).ComfyButton({
-					icon: "share",
-					action: () => {
-						if (share_option === 'openart') {
-							showOpenArtShareDialog();
-							return;
-						} else if (share_option === 'matrix' || share_option === 'comfyworkflows') {
-							showShareDialog(share_option);
-							return;
-						} else if (share_option === 'youml') {
-							showYouMLShareDialog();
-							return;
-						}
-
-						if(!ShareDialogChooser.instance) {
-							ShareDialogChooser.instance = new ShareDialogChooser();
-						}
-						ShareDialogChooser.instance.show();
-					},
-					tooltip: "Share"
 				}).element
 			);
 
@@ -1657,36 +1431,6 @@ app.registerExtension({
 			}
 		menu.append(managerButton);
 
-		const shareButton = document.createElement("button");
-		shareButton.id = "shareButton";
-		shareButton.textContent = "Share";
-		shareButton.onclick = () => {
-			if (share_option === 'openart') {
-				showOpenArtShareDialog();
-				return;
-			} else if (share_option === 'matrix' || share_option === 'comfyworkflows') {
-				showShareDialog(share_option);
-				return;
-			} else if (share_option === 'youml') {
-				showYouMLShareDialog();
-				return;
-			}
-
-			if(!ShareDialogChooser.instance) {
-				ShareDialogChooser.instance = new ShareDialogChooser();
-			}
-			ShareDialogChooser.instance.show();
-		}
-		// make the background color a gradient of blue to green
-		shareButton.style.background = "linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%)";
-		shareButton.style.color = "black";
-
-		// Load share option from local storage to determine whether to show
-		// the share button.
-		const shouldShowShareButton = share_option !== 'none';
-		shareButton.style.display = shouldShowShareButton ? "inline-block" : "none";
-
-		menu.append(shareButton);
 	},
 
 	async beforeRegisterNodeDef(nodeType, nodeData, app) {
@@ -1712,39 +1456,6 @@ app.registerExtension({
 				}, null);
 			}
 
-			if (isOutputNode(node)) {
-				const { potential_outputs } = getPotentialOutputsAndOutputNodes([this]);
-				const hasOutput = potential_outputs.length > 0;
-
-				// Check if the previous menu option is `null`. If it's not,
-				// then we need to add a `null` as a separator.
-				if (options[options.length - 1] !== null) {
-					options.push(null);
-				}
-
-				options.push({
-					content: "🏞️ Share Output",
-					disabled: !hasOutput,
-					callback: (obj) => {
-						if (!ShareDialog.instance) {
-							ShareDialog.instance = new ShareDialog();
-						}
-						const shareButton = document.getElementById("shareButton");
-						if (shareButton) {
-							const currentNode = this;
-							if (!OpenArtShareDialog.instance) {
-								OpenArtShareDialog.instance = new OpenArtShareDialog();
-							}
-							OpenArtShareDialog.instance.selectedNodeId = currentNode.id;
-							if (!ShareDialog.instance) {
-								ShareDialog.instance = new ShareDialog(share_option);
-							}
-							ShareDialog.instance.selectedNodeId = currentNode.id;
-							shareButton.click();
-						}
-					}
-				}, null);
-			}
 		}
 	},
 });
