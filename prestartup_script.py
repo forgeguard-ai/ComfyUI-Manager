@@ -472,7 +472,7 @@ def ensure_dependencies():
             try:
                 subprocess.check_output(manager_util.make_pip_cmd(['install', '--user', '-r', requirements_path]))
             except subprocess.CalledProcessError:
-                print("## [ERROR] ComfyUI-Manager: Failed to install the GitPython package in the correct Python environment. Please install it manually in the appropriate environment. (You can seek help at https://app.element.io/#/room/%23comfyui_space%3Amatrix.org)")
+                print("## [ERROR] ComfyUI-Manager: Failed to install the GitPython package in the correct Python environment. Please install it manually in the appropriate environment. (You can seek help at https://github.com/forgeguard-ai/ComfyUI-Manager/issues)")
 
     try:
         print("## ComfyUI-Manager: installing dependencies done.")

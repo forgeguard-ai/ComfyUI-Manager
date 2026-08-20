@@ -1,0 +1,30 @@
+name: ForgeGuard CI
+
+on:
+  push:
+    branches: [main, "claude/**", "forge/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: forgeguard-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: pip install pytest aiohttp requests tqdm huggingface-hub GitPython toml rich typer chardet
+      - name: Unit tests
+        run: pytest tests/ -q --ignore=tests/e2e
+      - name: Byte-compile runtime modules
+        run: python -m compileall -q glob prestartup_script.py cm-cli.py __init__.py

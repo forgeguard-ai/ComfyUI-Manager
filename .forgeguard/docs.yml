@@ -1,0 +1,26 @@
+version: 1
+enabled: true
+
+project:
+  slug: comfyui-manager
+  title: ForgeGuard ComfyUI-Manager
+  kind: maintained-fork
+  summary: Hardened ComfyUI-Manager fork with share/cloud integrations removed and token-aware, validated model downloads.
+
+repository:
+  owner: forgeguard-ai
+  name: ComfyUI-Manager
+  default_branch: main
+
+source:
+  content_root: docs/forgeguard
+  entrypoint: index.md
+
+publishing:
+  route: /projects/comfyui-manager/docs
+  versions: both
+  include_generated: false
+
+upstream:
+  repository: ltdrdata/ComfyUI-Manager
+  tracking_policy: upstream-main

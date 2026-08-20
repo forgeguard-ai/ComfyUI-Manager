@@ -48,7 +48,7 @@ version_code = [3, 41]
 version_str = f"V{version_code[0]}.{version_code[1]}" + (f'.{version_code[2]}' if len(version_code) > 2 else '')
 
 
-DEFAULT_CHANNEL = "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main"
+DEFAULT_CHANNEL = "https://raw.githubusercontent.com/forgeguard-ai/ComfyUI-Manager/main"
 
 
 default_custom_nodes_path = None
