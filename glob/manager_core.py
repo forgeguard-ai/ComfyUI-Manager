@@ -1851,7 +1851,9 @@ def read_config():
         default_conf = config['default']
 
         def get_bool(key, default_value):
-            return default_conf[key].lower() == 'true' if key in default_conf else False
+            # ForgeGuard fix: honor default_value (upstream returned False for
+            # any key missing from an existing config.ini).
+            return default_conf[key].lower() == 'true' if key in default_conf else bool(default_value)
 
         manager_util.use_uv = default_conf['use_uv'].lower() == 'true' if 'use_uv' in default_conf else False
         manager_util.bypass_ssl = get_bool('bypass_ssl', False)

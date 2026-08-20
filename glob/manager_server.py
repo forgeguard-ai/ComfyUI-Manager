@@ -1849,59 +1849,47 @@ def add_target_blank(html_text):
 
 @routes.get("/manager/notice")
 async def get_notice(request):
-    url = "github.com"
-    path = "/ltdrdata/ltdrdata.github.io/wiki/News"
+    # ForgeGuard: upstream fetched github.com wiki HTML here on every menu open
+    # (with TLS verification disabled). This fork renders the notice board
+    # locally — same version/status footer, zero network egress.
+    markdown_content = (
+        "<P>ForgeGuard maintained fork — cloud integrations and telemetry removed.</P>"
+        "<P><a href='https://github.com/forgeguard-ai/ComfyUI-Manager' target='_blank'>Fork changes</a>"
+        " · <a href='https://github.com/forgeguard-ai/comfyui-foundry' target='_blank'>ComfyUI-Foundry</a></P>"
+    )
 
-    async with aiohttp.ClientSession(trust_env=True, connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
-        async with session.get(f"https://{url}{path}") as response:
-            if response.status == 200:
-                # html_content = response.read().decode('utf-8')
-                html_content = await response.text()
+    version_tag = os.environ.get('__COMFYUI_DESKTOP_VERSION__')
+    if version_tag is not None:
+        markdown_content += f"<HR>ComfyUI: {version_tag} [Desktop]"
+    else:
+        version_tag = core.get_comfyui_tag()
+        if version_tag is None:
+            markdown_content += f"<HR>ComfyUI: {core.comfy_ui_revision}[{comfy_ui_hash[:6]}]({core.comfy_ui_commit_datetime.date()})"
+        else:
+            markdown_content += (f"<HR>ComfyUI: {version_tag}<BR>"
+                                 f"&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;({core.comfy_ui_commit_datetime.date()})")
+    markdown_content += f"<BR>Manager: {core.version_str}"
 
-                pattern = re.compile(r'<div class="markdown-body">([\s\S]*?)</div>')
-                match = pattern.search(html_content)
+    try:
+        if '__COMFYUI_DESKTOP_VERSION__' not in os.environ:
+            if core.comfy_ui_commit_datetime == datetime(1900, 1, 1, 0, 0, 0):
+                markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI isn\'t git repo.</P>' + markdown_content
+            elif core.comfy_ui_required_commit_datetime.date() > core.comfy_ui_commit_datetime.date():
+                markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI is too OUTDATED!!!</P>' + markdown_content
+    except:
+        pass
 
-                if match:
-                    markdown_content = match.group(1)
-                    version_tag = os.environ.get('__COMFYUI_DESKTOP_VERSION__')
-                    if version_tag is not None:
-                        markdown_content += f"<HR>ComfyUI: {version_tag} [Desktop]"
-                    else:
-                        version_tag = core.get_comfyui_tag()
-                        if version_tag is None:
-                            markdown_content += f"<HR>ComfyUI: {core.comfy_ui_revision}[{comfy_ui_hash[:6]}]({core.comfy_ui_commit_datetime.date()})"
-                        else:
-                            markdown_content += (f"<HR>ComfyUI: {version_tag}<BR>"
-                                                 f"&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;({core.comfy_ui_commit_datetime.date()})")
-                    # markdown_content += f"<BR>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;()"
-                    markdown_content += f"<BR>Manager: {core.version_str}"
+    # Prepend startup notices from manager_migration
+    for message, level in reversed(manager_migration.startup_notices):
+        if level == 'error':
+            style = 'color:red; background-color:white; font-weight:bold'
+        elif level == 'warning':
+            style = 'color:orange; background-color:white; font-weight:bold'
+        else:
+            style = 'color:blue; background-color:white'
+        markdown_content = f'<P style="{style}">{message}</P>' + markdown_content
 
-                    markdown_content = add_target_blank(markdown_content)
-
-                    try:
-                        if '__COMFYUI_DESKTOP_VERSION__' not in os.environ:
-                            if core.comfy_ui_commit_datetime == datetime(1900, 1, 1, 0, 0, 0):
-                                markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI isn\'t git repo.</P>' + markdown_content
-                            elif core.comfy_ui_required_commit_datetime.date() > core.comfy_ui_commit_datetime.date():
-                                markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI is too OUTDATED!!!</P>' + markdown_content
-                    except:
-                        pass
-
-                    # Prepend startup notices from manager_migration
-                    for message, level in reversed(manager_migration.startup_notices):
-                        if level == 'error':
-                            style = 'color:red; background-color:white; font-weight:bold'
-                        elif level == 'warning':
-                            style = 'color:orange; background-color:white; font-weight:bold'
-                        else:
-                            style = 'color:blue; background-color:white'
-                        markdown_content = f'<P style="{style}">{message}</P>' + markdown_content
-
-                    return web.Response(text=markdown_content, status=200)
-                else:
-                    return web.Response(text="Unable to retrieve Notice", status=200)
-            else:
-                return web.Response(text="Unable to retrieve Notice", status=200)
+    return web.Response(text=markdown_content, status=200)
 
 
 @routes.get("/manager/startup_alerts")
@@ -2072,7 +2060,11 @@ async def default_cache_update():
             logging.error(f"[ComfyUI-Manager] Failed to perform initial fetching '{filename}': {e}")
             traceback.print_exc()
 
-    if core.get_config()['network_mode'] != 'offline':
+    if core.get_config()['db_mode'] == 'local':
+        # ForgeGuard: local DB mode serves the packaged catalog JSONs — no
+        # startup prefetch, no unsolicited egress. Refresh is user-triggered.
+        logging.info("[ComfyUI-Manager] db_mode=local: startup catalog prefetch skipped.")
+    elif core.get_config()['network_mode'] != 'offline':
         a = get_cache("custom-node-list.json")
         b = get_cache("extension-node-map.json")
         c = get_cache("model-list.json")
