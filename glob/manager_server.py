@@ -317,9 +317,9 @@ setup_environment()
 # Expand Server api
 
 from aiohttp import web
-import aiohttp
 import zipfile
 import urllib.request
+from urllib.parse import urlparse
 
 
 def security_403_response(flag_token=None):

@@ -3,7 +3,6 @@
 Scans runtime code (glob/*.py, js/*.js, the entrypoints) — not the catalog
 JSONs, whose data legitimately mentions third-party node names.
 """
-import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
