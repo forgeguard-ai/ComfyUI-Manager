@@ -1702,18 +1702,39 @@ async def disable_node(request):
 
 
 async def check_whitelist_for_model(item):
-    json_obj = await core.get_data_by_mode('cache', 'model-list.json')
+    # ForgeGuard: the catalog match also pins the URL. Upstream matched only
+    # (save_path, base, filename), letting a request reuse a catalogued
+    # identity while fetching an arbitrary URL.
+    def matches(x):
+        return (x['save_path'] == item['save_path'] and x['base'] == item['base']
+                and x['filename'] == item['filename'] and x.get('url') == item.get('url'))
 
-    for x in json_obj.get('models', []):
-        if x['save_path'] == item['save_path'] and x['base'] == item['base'] and x['filename'] == item['filename']:
-            return True
+    json_obj = await core.get_data_by_mode('cache', 'model-list.json')
+    if any(matches(x) for x in json_obj.get('models', [])):
+        return True
 
     json_obj = await core.get_data_by_mode('local', 'model-list.json')
+    if any(matches(x) for x in json_obj.get('models', [])):
+        return True
 
-    for x in json_obj.get('models', []):
-        if x['save_path'] == item['save_path'] and x['base'] == item['base'] and x['filename'] == item['filename']:
+    return False
+
+
+def is_allowed_model_source(url):
+    """ForgeGuard: non-catalog model URLs must be https on an allowlisted host
+    (config key `model_download_allowed_hosts`, comma-separated)."""
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme != 'https' or not parsed.hostname:
+        return False
+    host = parsed.hostname.lower()
+    allowed = core.get_config().get('model_download_allowed_hosts', '')
+    for entry in allowed.split(','):
+        entry = entry.strip().lower()
+        if entry and (host == entry or host.endswith('.' + entry)):
             return True
-        
     return False
 
 
@@ -1727,8 +1748,12 @@ async def install_model(request):
 
     # validate request
     if not await check_whitelist_for_model(json_data):
-        logging.error(f"[ComfyUI-Manager] Invalid model install request is detected: {json_data}")
-        return web.Response(status=400, text="Invalid model install request is detected")
+        # ForgeGuard: not in the catalog — permit only https URLs on the
+        # configured host allowlist (huggingface/civitai/github by default).
+        if not is_allowed_model_source(json_data.get('url', '')):
+            logging.error(f"[ComfyUI-Manager] Invalid model install request is detected: {json_data}")
+            return web.Response(status=400, text="Invalid model install request is detected")
+        logging.info(f"[ComfyUI-Manager] Non-catalog model install from allowlisted host: {json_data.get('url')}")
 
     if not json_data['filename'].endswith('.safetensors') and not is_allowed_security_level('high'):
         models_json = await core.get_data_by_mode('cache', 'model-list.json', 'default')

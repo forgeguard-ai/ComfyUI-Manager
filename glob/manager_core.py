@@ -1872,6 +1872,7 @@ def read_config():
                     'update_policy': default_conf.get('update_policy', 'stable-comfyui').lower(),
                     'windows_selector_event_loop_policy': get_bool('windows_selector_event_loop_policy', False),
                     'model_download_by_agent': get_bool('model_download_by_agent', False),
+                    'model_download_allowed_hosts': default_conf.get('model_download_allowed_hosts', 'huggingface.co,civitai.com,github.com,raw.githubusercontent.com'),
                     'downgrade_blacklist': default_conf.get('downgrade_blacklist', '').lower(),
                     'always_lazy_install': get_bool('always_lazy_install', False),
                     'network_mode': default_conf.get('network_mode', 'public').lower(),
@@ -1903,6 +1904,7 @@ def read_config():
             'update_policy': 'stable-comfyui',
             'windows_selector_event_loop_policy': False,
             'model_download_by_agent': False,
+            'model_download_allowed_hosts': 'huggingface.co,civitai.com,github.com,raw.githubusercontent.com',
             'downgrade_blacklist': '',
             'always_lazy_install': False,
             'network_mode': 'public',   # public | private | offline
