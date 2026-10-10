@@ -39,3 +39,26 @@ if _ROOT_INIT.exists() and "__init__" not in sys.modules:
         "see tests/conftest.py for rationale."
     )
     sys.modules["__init__"] = _stub
+
+
+# ForgeGuard fork: these upstream test classes exercise surfaces this fork
+# removes (third-party share dialogs; sanitizing remotely fetched notice HTML,
+# which the fork no longer fetches). They are skipped with a stated reason
+# rather than deleted, so upstream's test files merge without conflicts.
+# tests/test_forgeguard_egress.py asserts the replacement guarantees.
+_FORGEGUARD_REMOVED_SURFACE_TESTS = {
+    "test_residual_sink_escaping.py::ShareDialogUrlTest":
+        "share integrations are removed in this fork",
+    "test_residual_sink_escaping.py::NoticeWiringTest":
+        "the notice board is rendered locally; there is no remote HTML to sanitize",
+}
+
+
+def pytest_collection_modifyitems(config, items):
+    import pytest
+
+    for item in items:
+        node = item.nodeid.rsplit("/", 1)[-1]
+        for prefix, reason in _FORGEGUARD_REMOVED_SURFACE_TESTS.items():
+            if node == prefix or node.startswith(prefix + "::"):
+                item.add_marker(pytest.mark.skip(reason=f"ForgeGuard fork: {reason}"))
