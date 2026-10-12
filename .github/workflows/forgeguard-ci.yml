@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test dependencies
-        run: pip install pytest aiohttp requests tqdm huggingface-hub GitPython toml rich typer chardet
+        run: pip install pytest aiohttp requests tqdm huggingface-hub GitPython toml rich typer chardet "nh3>=0.3.7"
       - name: Unit tests
         run: pytest tests/ -q --ignore=tests/e2e
       - name: Byte-compile runtime modules
