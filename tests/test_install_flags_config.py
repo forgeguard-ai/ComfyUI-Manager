@@ -219,23 +219,32 @@ class InstallFlagsConfigContractTest(unittest.TestCase):
         self.assertIs(payload["flags"]["git"], False, "no auto-seed from weak")
         self.assertIs(payload["flags"]["pip"], False, "no auto-seed from weak")
 
-    def test_sc42_get_bool_quirk_guard(self):
-        """get_bool ignores its default param: missing `file_logging` reads
-        False despite a True default. The flags rely on this missing->False
-        quirk; this guard pins it."""
+    def test_sc42_get_bool_default_contract(self):
+        """ForgeGuard fixed get_bool to honor its default param. The security
+        contract this guard protects is unchanged: the install flags declare
+        False defaults, so a missing key still reads False (fail-closed).
+        Keys with True defaults (file_logging) now read their documented
+        default instead of silently flipping off."""
         payload = _run_child(
             """
             write_ini("[default]\\nsecurity_level = normal\\n")
             cfg = fresh_read()
-            print(json.dumps({"file_logging": cfg.get("file_logging", "<ABSENT>")}))
+            print(json.dumps({
+                "file_logging": cfg.get("file_logging", "<ABSENT>"),
+                "allow_git_url_install": cfg.get("allow_git_url_install", "<ABSENT>"),
+                "allow_pip_install": cfg.get("allow_pip_install", "<ABSENT>"),
+            }))
             """
         )
         self.assertIs(
-            payload["file_logging"],
-            False,
-            "get_bool quirk changed: missing key no longer reads False — "
-            "new flags rely on missing->False",
-        )
+            payload["allow_git_url_install"], False,
+            "missing allow_git_url_install must stay fail-closed (False)")
+        self.assertIs(
+            payload["allow_pip_install"], False,
+            "missing allow_pip_install must stay fail-closed (False)")
+        self.assertIs(
+            payload["file_logging"], True,
+            "missing file_logging must read its documented True default")
 
 
 if __name__ == "__main__":

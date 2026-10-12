@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import platform
 import time
@@ -12,6 +13,17 @@ import requests
 import toml
 
 base_url = "https://api.comfy.org"
+
+
+def _registry_blocked():
+    """ForgeGuard: honor network_mode for every ComfyRegistry call (upstream
+    left install_node/all_versions_of_node unguarded)."""
+    mode = manager_core.get_config()['network_mode']
+    if mode != 'public':
+        logging.warning(f"[ComfyUI-Manager] ComfyRegistry access blocked (network_mode={mode})")
+        return True
+    return False
+
 
 
 lock = asyncio.Lock()
@@ -174,6 +186,9 @@ def install_node(node_id, version=None):
     Returns:
       NodeVersion: Node version data or error message.
     """
+    if _registry_blocked():
+        return None
+
     if version is None:
         url = f"{base_url}/nodes/{node_id}/install"
     else:
@@ -188,6 +203,9 @@ def install_node(node_id, version=None):
 
 
 def all_versions_of_node(node_id):
+    if _registry_blocked():
+        return None
+
     url = f"{base_url}/nodes/{node_id}/versions?statuses=NodeVersionStatusActive&statuses=NodeVersionStatusPending"
 
     response = requests.get(url, verify=not manager_util.bypass_ssl)

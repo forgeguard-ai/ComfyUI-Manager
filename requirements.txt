@@ -1,6 +1,4 @@
 GitPython
-PyGithub
-matrix-nio
 transformers
 huggingface-hub
 typer

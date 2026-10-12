@@ -48,7 +48,7 @@ version_code = [3, 41]
 version_str = f"V{version_code[0]}.{version_code[1]}" + (f'.{version_code[2]}' if len(version_code) > 2 else '')
 
 
-DEFAULT_CHANNEL = "https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main"
+DEFAULT_CHANNEL = "https://raw.githubusercontent.com/forgeguard-ai/ComfyUI-Manager/main"
 
 
 default_custom_nodes_path = None
@@ -1851,7 +1851,9 @@ def read_config():
         default_conf = config['default']
 
         def get_bool(key, default_value):
-            return default_conf[key].lower() == 'true' if key in default_conf else False
+            # ForgeGuard fix: honor default_value (upstream returned False for
+            # any key missing from an existing config.ini).
+            return default_conf[key].lower() == 'true' if key in default_conf else bool(default_value)
 
         manager_util.use_uv = default_conf['use_uv'].lower() == 'true' if 'use_uv' in default_conf else False
         manager_util.bypass_ssl = get_bool('bypass_ssl', False)
@@ -1870,6 +1872,7 @@ def read_config():
                     'update_policy': default_conf.get('update_policy', 'stable-comfyui').lower(),
                     'windows_selector_event_loop_policy': get_bool('windows_selector_event_loop_policy', False),
                     'model_download_by_agent': get_bool('model_download_by_agent', False),
+                    'model_download_allowed_hosts': default_conf.get('model_download_allowed_hosts', 'huggingface.co,civitai.com,github.com,raw.githubusercontent.com'),
                     'downgrade_blacklist': default_conf.get('downgrade_blacklist', '').lower(),
                     'always_lazy_install': get_bool('always_lazy_install', False),
                     'network_mode': default_conf.get('network_mode', 'public').lower(),
@@ -1901,6 +1904,7 @@ def read_config():
             'update_policy': 'stable-comfyui',
             'windows_selector_event_loop_policy': False,
             'model_download_by_agent': False,
+            'model_download_allowed_hosts': 'huggingface.co,civitai.com,github.com,raw.githubusercontent.com',
             'downgrade_blacklist': '',
             'always_lazy_install': False,
             'network_mode': 'public',   # public | private | offline

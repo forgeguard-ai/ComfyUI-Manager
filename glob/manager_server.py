@@ -140,7 +140,7 @@ def is_allowed_security_level(level):
 
 async def get_risky_level(files, pip_packages):
     json_data1 = await core.get_data_by_mode('local', 'custom-node-list.json')
-    json_data2 = await core.get_data_by_mode('cache', 'custom-node-list.json', channel_url='https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main')
+    json_data2 = await core.get_data_by_mode('cache', 'custom-node-list.json', channel_url='https://raw.githubusercontent.com/forgeguard-ai/ComfyUI-Manager/main')
 
     all_urls = set()
     for x in json_data1['custom_nodes'] + json_data2['custom_nodes']:
@@ -317,9 +317,9 @@ setup_environment()
 # Expand Server api
 
 from aiohttp import web
-import aiohttp
 import zipfile
 import urllib.request
+from urllib.parse import urlparse
 
 
 def security_403_response(flag_token=None):
@@ -1702,18 +1702,39 @@ async def disable_node(request):
 
 
 async def check_whitelist_for_model(item):
-    json_obj = await core.get_data_by_mode('cache', 'model-list.json')
+    # ForgeGuard: the catalog match also pins the URL. Upstream matched only
+    # (save_path, base, filename), letting a request reuse a catalogued
+    # identity while fetching an arbitrary URL.
+    def matches(x):
+        return (x['save_path'] == item['save_path'] and x['base'] == item['base']
+                and x['filename'] == item['filename'] and x.get('url') == item.get('url'))
 
-    for x in json_obj.get('models', []):
-        if x['save_path'] == item['save_path'] and x['base'] == item['base'] and x['filename'] == item['filename']:
-            return True
+    json_obj = await core.get_data_by_mode('cache', 'model-list.json')
+    if any(matches(x) for x in json_obj.get('models', [])):
+        return True
 
     json_obj = await core.get_data_by_mode('local', 'model-list.json')
+    if any(matches(x) for x in json_obj.get('models', [])):
+        return True
 
-    for x in json_obj.get('models', []):
-        if x['save_path'] == item['save_path'] and x['base'] == item['base'] and x['filename'] == item['filename']:
+    return False
+
+
+def is_allowed_model_source(url):
+    """ForgeGuard: non-catalog model URLs must be https on an allowlisted host
+    (config key `model_download_allowed_hosts`, comma-separated)."""
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme != 'https' or not parsed.hostname:
+        return False
+    host = parsed.hostname.lower()
+    allowed = core.get_config().get('model_download_allowed_hosts', '')
+    for entry in allowed.split(','):
+        entry = entry.strip().lower()
+        if entry and (host == entry or host.endswith('.' + entry)):
             return True
-        
     return False
 
 
@@ -1727,8 +1748,12 @@ async def install_model(request):
 
     # validate request
     if not await check_whitelist_for_model(json_data):
-        logging.error(f"[ComfyUI-Manager] Invalid model install request is detected: {json_data}")
-        return web.Response(status=400, text="Invalid model install request is detected")
+        # ForgeGuard: not in the catalog — permit only https URLs on the
+        # configured host allowlist (huggingface/civitai/github by default).
+        if not is_allowed_model_source(json_data.get('url', '')):
+            logging.error(f"[ComfyUI-Manager] Invalid model install request is detected: {json_data}")
+            return web.Response(status=400, text="Invalid model install request is detected")
+        logging.info(f"[ComfyUI-Manager] Non-catalog model install from allowlisted host: {json_data.get('url')}")
 
     if not json_data['filename'].endswith('.safetensors') and not is_allowed_security_level('high'):
         models_json = await core.get_data_by_mode('cache', 'model-list.json', 'default')
@@ -1849,59 +1874,47 @@ def add_target_blank(html_text):
 
 @routes.get("/manager/notice")
 async def get_notice(request):
-    url = "github.com"
-    path = "/ltdrdata/ltdrdata.github.io/wiki/News"
+    # ForgeGuard: upstream fetched github.com wiki HTML here on every menu open
+    # (with TLS verification disabled). This fork renders the notice board
+    # locally — same version/status footer, zero network egress.
+    markdown_content = (
+        "<P>ForgeGuard maintained fork — cloud integrations and telemetry removed.</P>"
+        "<P><a href='https://github.com/forgeguard-ai/ComfyUI-Manager' target='_blank'>Fork changes</a>"
+        " · <a href='https://github.com/forgeguard-ai/comfyui-foundry' target='_blank'>ComfyUI-Foundry</a></P>"
+    )
 
-    async with aiohttp.ClientSession(trust_env=True, connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
-        async with session.get(f"https://{url}{path}") as response:
-            if response.status == 200:
-                # html_content = response.read().decode('utf-8')
-                html_content = await response.text()
+    version_tag = os.environ.get('__COMFYUI_DESKTOP_VERSION__')
+    if version_tag is not None:
+        markdown_content += f"<HR>ComfyUI: {version_tag} [Desktop]"
+    else:
+        version_tag = core.get_comfyui_tag()
+        if version_tag is None:
+            markdown_content += f"<HR>ComfyUI: {core.comfy_ui_revision}[{comfy_ui_hash[:6]}]({core.comfy_ui_commit_datetime.date()})"
+        else:
+            markdown_content += (f"<HR>ComfyUI: {version_tag}<BR>"
+                                 f"&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;({core.comfy_ui_commit_datetime.date()})")
+    markdown_content += f"<BR>Manager: {core.version_str}"
 
-                pattern = re.compile(r'<div class="markdown-body">([\s\S]*?)</div>')
-                match = pattern.search(html_content)
+    try:
+        if '__COMFYUI_DESKTOP_VERSION__' not in os.environ:
+            if core.comfy_ui_commit_datetime == datetime(1900, 1, 1, 0, 0, 0):
+                markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI isn\'t git repo.</P>' + markdown_content
+            elif core.comfy_ui_required_commit_datetime.date() > core.comfy_ui_commit_datetime.date():
+                markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI is too OUTDATED!!!</P>' + markdown_content
+    except:
+        pass
 
-                if match:
-                    markdown_content = match.group(1)
-                    version_tag = os.environ.get('__COMFYUI_DESKTOP_VERSION__')
-                    if version_tag is not None:
-                        markdown_content += f"<HR>ComfyUI: {version_tag} [Desktop]"
-                    else:
-                        version_tag = core.get_comfyui_tag()
-                        if version_tag is None:
-                            markdown_content += f"<HR>ComfyUI: {core.comfy_ui_revision}[{comfy_ui_hash[:6]}]({core.comfy_ui_commit_datetime.date()})"
-                        else:
-                            markdown_content += (f"<HR>ComfyUI: {version_tag}<BR>"
-                                                 f"&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;({core.comfy_ui_commit_datetime.date()})")
-                    # markdown_content += f"<BR>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;()"
-                    markdown_content += f"<BR>Manager: {core.version_str}"
+    # Prepend startup notices from manager_migration
+    for message, level in reversed(manager_migration.startup_notices):
+        if level == 'error':
+            style = 'color:red; background-color:white; font-weight:bold'
+        elif level == 'warning':
+            style = 'color:orange; background-color:white; font-weight:bold'
+        else:
+            style = 'color:blue; background-color:white'
+        markdown_content = f'<P style="{style}">{message}</P>' + markdown_content
 
-                    markdown_content = add_target_blank(markdown_content)
-
-                    try:
-                        if '__COMFYUI_DESKTOP_VERSION__' not in os.environ:
-                            if core.comfy_ui_commit_datetime == datetime(1900, 1, 1, 0, 0, 0):
-                                markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI isn\'t git repo.</P>' + markdown_content
-                            elif core.comfy_ui_required_commit_datetime.date() > core.comfy_ui_commit_datetime.date():
-                                markdown_content = '<P style="text-align: center; color:red; background-color:white; font-weight:bold">Your ComfyUI is too OUTDATED!!!</P>' + markdown_content
-                    except:
-                        pass
-
-                    # Prepend startup notices from manager_migration
-                    for message, level in reversed(manager_migration.startup_notices):
-                        if level == 'error':
-                            style = 'color:red; background-color:white; font-weight:bold'
-                        elif level == 'warning':
-                            style = 'color:orange; background-color:white; font-weight:bold'
-                        else:
-                            style = 'color:blue; background-color:white'
-                        markdown_content = f'<P style="{style}">{message}</P>' + markdown_content
-
-                    return web.Response(text=markdown_content, status=200)
-                else:
-                    return web.Response(text="Unable to retrieve Notice", status=200)
-            else:
-                return web.Response(text="Unable to retrieve Notice", status=200)
+    return web.Response(text=markdown_content, status=200)
 
 
 @routes.get("/manager/startup_alerts")
@@ -2072,7 +2085,11 @@ async def default_cache_update():
             logging.error(f"[ComfyUI-Manager] Failed to perform initial fetching '{filename}': {e}")
             traceback.print_exc()
 
-    if core.get_config()['network_mode'] != 'offline':
+    if core.get_config()['db_mode'] == 'local':
+        # ForgeGuard: local DB mode serves the packaged catalog JSONs — no
+        # startup prefetch, no unsolicited egress. Refresh is user-triggered.
+        logging.info("[ComfyUI-Manager] db_mode=local: startup catalog prefetch skipped.")
+    elif core.get_config()['network_mode'] != 'offline':
         a = get_cache("custom-node-list.json")
         b = get_cache("extension-node-map.json")
         c = get_cache("model-list.json")
