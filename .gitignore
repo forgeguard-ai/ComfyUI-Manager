@@ -20,3 +20,6 @@ pip_overrides.json
 !tests/cases/*.json
 check2.sh
 /venv/
+
+# Local agent planning notes; never committed.
+docs/agent-plans/
