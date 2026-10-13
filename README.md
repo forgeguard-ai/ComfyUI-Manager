@@ -2,7 +2,7 @@
 
 # ComfyUI-Manager — ForgeGuard Fork
 
-<!-- banner: docs/forgeguard/assets/banner-dark.png (asset pending) -->
+<!-- banner: docs/site/assets/banner-dark.png (asset pending) -->
 
 **A hardened fork of [ComfyUI-Manager](https://github.com/ltdrdata/ComfyUI-Manager) with all share/cloud integrations removed and model downloads hardened — the manager baked into [ComfyUI-Foundry](https://github.com/forgeguard-ai/comfyui-foundry) images.**
 
@@ -23,7 +23,7 @@
 > validation**, and **streaming downloads with resume**. Node management itself works as
 > upstream documents.
 >
-> [What changed](./docs/forgeguard/forgeguard-changes.md) ·
+> [What changed](./docs/site/forgeguard-changes.md) ·
 > [Upstream README](https://github.com/ltdrdata/ComfyUI-Manager#readme) ·
 > Not affiliated with or endorsed by Comfy Org or the upstream author.
 
@@ -38,7 +38,7 @@
 | Catalog channels | `channels.list` points at this fork, which carries the upstream node/model database and syncs it regularly. |
 
 The full, file-level list lives in
-[docs/forgeguard/forgeguard-changes.md](./docs/forgeguard/forgeguard-changes.md).
+[docs/site/forgeguard-changes.md](./docs/site/forgeguard-changes.md).
 Upstream base: see [`FORK_UPSTREAM_BASE`](./FORK_UPSTREAM_BASE).
 
 ## Usage
@@ -53,4 +53,4 @@ above.
 ## License
 
 GPL-3.0, same as upstream. ForgeGuard modifications are documented in
-[docs/forgeguard/](./docs/forgeguard/forgeguard-changes.md) and the commit history.
+[docs/site/](./docs/site/forgeguard-changes.md) and the commit history.

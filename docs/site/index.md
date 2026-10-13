@@ -1,6 +1,8 @@
 ---
 title: ForgeGuard ComfyUI-Manager fork
 description: Documentation for the ForgeGuard-maintained ComfyUI-Manager fork.
+order: 0
+status: beta
 ---
 
 # ForgeGuard ComfyUI-Manager fork
