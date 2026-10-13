@@ -1,6 +1,8 @@
 ---
 title: ForgeGuard changes
 description: Every behavioral delta this fork carries against upstream ComfyUI-Manager.
+order: 10
+status: beta
 ---
 
 # ForgeGuard changes
